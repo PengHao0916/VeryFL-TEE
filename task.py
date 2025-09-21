@@ -1,8 +1,11 @@
 import logging
+import hashlib
+import json
+from collections import OrderedDict
+
 logger = logging.getLogger(__name__)
 
 from torch.utils.data import DataLoader
-
 from config.algorithm import Algorithm
 from server.aggregation_alg.fedavg import fedavgAggregator
 from client.clients import Client, BaseClient, SignClient
@@ -92,6 +95,7 @@ class Task:
         #Regist the client to the blockchain.
         for i in range(self.global_args['client_num']):
             chain_proxy.client_regist()
+            print(f"----> 客户端 {i + 1} 注册完成，当前区块高度: {chain_proxy.get_block_height()}")
         self.client_list = chain_proxy.get_client_list()
     
     def _construct_client(self):
@@ -101,17 +105,42 @@ class Task:
             self.client_pool.append(new_client)
     
     def run(self):
+        print("========> 步骤1: 正在注册客户端到区块链...")
         self._regist_client()
+        print("========> 步骤2: 正在构建数据加载器 (Dataloader)...")
         self._construct_dataloader()
+        print("========> 步骤3: 正在构建签名/水印...")
         self._construct_sign()
+        print("========> 步骤4: 正在构建客户端实例...")
         self._construct_client()
-        
+
+        print("========> 步骤5: 进入主训练循环...")
         for i in range(self.global_args['communication_round']):
             for client in self.client_pool:
                 client.train(epoch = i)
                 client.test(epoch = i)
                 client.sign_test(epoch = i)
+
+            print(f"========> [第 {i + 1} 轮] 服务器接收上传...")
             self.server.receive_upload(self.client_pool)
+
+            print(f"========> [第 {i + 1} 轮] 服务器聚合模型...")
             global_model = self.server.aggregate()
+
+            # --- 从这里开始添加 ---
+            # 1. 将模型参数字典转换为一个确定的字符串
+            model_json = json.dumps(OrderedDict({k: v.tolist() for k, v in global_model.items()}))
+            # 2. 计算SHA-256哈希值
+            model_hash_hex = hashlib.sha256(model_json.encode('utf-8')).hexdigest()
+            # 3. 将十六进制的哈希值转换为一个大整数
+            model_hash_int = int(model_hash_hex, 16)
+            # 4. 调用我们的新函数上传到区块链
+            chain_proxy.upload_model_hash(model_hash_int, i + 1)
+            print(f"----> 当前区块高度: {chain_proxy.get_block_height()}")
+            # --- 添加结束 ---
+
+
+            print(f"========> [第 {i + 1} 轮] 向客戶端分发新模型...")
+            print(f"------------------------------------------------------------------")
             for client in self.client_pool:
                 client.load_state_dict(global_model)

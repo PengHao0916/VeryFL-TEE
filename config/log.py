@@ -21,7 +21,6 @@ def get_file_name():
     
 
 def set_log_config():
-    logging.basicConfig(filename = get_file_name(), 
-                        encoding = encoding, 
+    logging.basicConfig(filename = get_file_name(),
                         level = level,
                         format = format)

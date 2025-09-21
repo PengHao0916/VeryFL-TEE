@@ -2,6 +2,7 @@ import logging
 import numpy.random
 import random
 from torch.utils.data import Dataset, DataLoader
+from typing import Dict
 from torch.utils.data.sampler import SubsetRandomSampler
 from collections import defaultdict
 
@@ -46,7 +47,7 @@ class DatasetSpliter:
                 per_class_list[n] = per_class_list[n][min(len(per_class_list[n]), no_imgs):]
         return per_client_list 
         
-    def dirichlet_split(self, dataset: Dataset, client_list: dict, batch_size: int = 32, alpha: int = 1) -> dict[DataLoader]:
+    def dirichlet_split(self, dataset: Dataset, client_list: dict, batch_size: int = 32, alpha: int = 1) -> Dict[str, DataLoader]:
         #get each client samples
         split_list = self._sample_dirichlet(dataset = dataset, 
                                             client_list = client_list,
@@ -63,8 +64,8 @@ class DatasetSpliter:
             dataloaders[client_id] = this_dataloader 
         
         return dataloaders
-    
-    def random_split(self, dataset: Dataset, client_list: dict, batch_size: int = 32) -> dict[DataLoader]:
+
+    def random_split(self, dataset: Dataset, client_list: dict, batch_size: int = 32) -> Dict[str, DataLoader]:
         #Here we use a large alpha to simulate the average sampling.
         return self.dirichlet_split(dataset, client_list, batch_size, 1000000)
     

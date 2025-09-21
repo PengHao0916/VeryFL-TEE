@@ -21,7 +21,8 @@ network.connect('development')
 server_accounts = accounts[0]
 watermarkNegotiation.deploy({'from':server_accounts})
 clientManager.deploy({'from':server_accounts})
-
+NetworkManager.deploy({'from': server_accounts})
+network_manager_proxy = NetworkManager[0]
         
 def upload():
     raise NotImplementedError 
@@ -51,9 +52,19 @@ class chainProxy():
         return self.client_num
     
     def get_client_list(self):
-        return self.client_list    
-    
-    
+        return self.client_list
+
+    def get_block_height(self):
+        return network.chain.height
+
+    def upload_model_hash(self, model_hash, epoch):
+        # 我们用服务器的账户 (accounts[0]) 来发送这个交易
+        # 为了简化，我们只上传哈希的前半部分作为结果 a，轮数作为 epoch
+        # 智能合约的 upload_result 函数需要三个 uint 参数 (a, b, epoch)
+        # 实际研究中，您需要将256位的哈希拆分为多个uint来完整上传
+        tx = network_manager_proxy.upload_result(model_hash, 0, epoch, {'from': self.server_accounts})
+        print(f"----> 已上传第 {epoch} 轮的模型哈希，交易ID: {tx.txid}")
+
     def add_account(self)->str:
         account = accounts.add()
         self.account_num += 1
@@ -65,6 +76,8 @@ class chainProxy():
         if(self.account_num<self.client_num):
             self.add_account()
         self.client_list[str(self.client_num)] = accounts[self.client_num]
+        network_manager_proxy.client_regist({'from': accounts[self.client_num]})
+
         return str(self.client_num) 
     
     def watermark_negotitaion(self,client_id:str,watermark_length=64):

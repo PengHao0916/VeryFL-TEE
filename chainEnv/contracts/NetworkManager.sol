@@ -52,7 +52,7 @@ contract NetworkManager{
         regist_result[msg.sender] = TrainResult(0,0,0);
     }
 
-    function upload_result(uint a, uint b, uint epoch) public only_participant{
+    function upload_result(uint a, uint b, uint epoch) public{
         TrainResult storage c = regist_result[msg.sender];
         c.a = a;
         c.b = b;

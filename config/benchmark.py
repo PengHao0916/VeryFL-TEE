@@ -40,7 +40,7 @@ class FashionMNIST(BenchMark):
             'batch_size': 32,
             'class_num': 10,
             'data_folder': './data',
-            'communication_round': 200,
+            'communication_round': 10,
             'non-iid': False,
             'alpha': 1,
         }

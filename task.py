@@ -417,7 +417,8 @@ class Task:
                 }
 
                 BYZANTINE_CLIENT_NUM_F=2;
-                self.server.upload_model(encrypted_package,byzantine_client_num=BYZANTINE_CLIENT_NUM_F)
+                AGGREGATION_STRATEGY = 'trimmed_mean'
+                self.server.upload_model(encrypted_package,byzantine_client_num=BYZANTINE_CLIENT_NUM_F,strategy=AGGREGATION_STRATEGY)
 
                 client.test(epoch=i)
                 client.sign_test(epoch=i)

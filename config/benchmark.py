@@ -58,12 +58,12 @@ class CIFAR10(BenchMark):
         super(CIFAR10,self).__init__('CIFAR10')
         self.global_args = {
             'client_num': 10,
-            'model': 'resnet18',
+            'model': 'resnet50',
             'dataset': 'CIFAR10',
             'batch_size': 32,
             'class_num': 10,
             'data_folder': './data',
-            'communication_round': 200,
+            'communication_round': 10,
             'non-iid': False,
             'alpha': 1,
         }

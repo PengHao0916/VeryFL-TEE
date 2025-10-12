@@ -178,7 +178,7 @@ class serverSimulator:
     #             self.global_model.load_state_dict(trained_model_state_dict)
     #
     #         self._clear_upload_model_list()
-    def upload_model(self, encrypted_upload_params: dict, byzantine_client_num: int = 0):
+    def upload_model(self, encrypted_upload_params: dict, byzantine_client_num: int = 0,strategy: str='fedavg'):
         # 服务器现在接收的是加密后的参数
         self.upload_model_list.append(encrypted_upload_params)
 
@@ -186,7 +186,8 @@ class serverSimulator:
             # 将整个加密列表和恶意客户端数量f，一同传递给TEE
             trained_model_state_dict = self.tee_aggregator.decrypt_and_aggregate(
                 self.upload_model_list,
-                byzantine_client_num=byzantine_client_num
+                byzantine_client_num=byzantine_client_num,
+                strategy=strategy
             )
 
             if self.global_model is not None and trained_model_state_dict is not None:

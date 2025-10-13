@@ -148,9 +148,28 @@ class Client:
 
 class BaseClient(Client):
     
-    def train(self, epoch: int):    
-        cal = self.trainer(self.model,self.dataloader,torch.nn.CrossEntropyLoss(),self.args)
-        ret_list = cal.train(self.args.get('num_steps'))
+    def train(self, epoch: int):
+        # 1. 从配置中获取初始学习率和衰减参数
+        initial_lr = self.args.get('lr', 0.001)
+        lr_decay_step = self.args.get('lr_decay_step', 1000)
+        lr_decay_rate = self.args.get('lr_decay_rate', 1.0)
+
+        # 2. 根据当前通信轮数 (epoch) 计算衰减次数
+        decay_count = epoch // lr_decay_step
+
+        # 3. 计算当前轮的实际学习率
+        current_lr = initial_lr * (lr_decay_rate ** decay_count)
+
+        # 4. 复制一份参数字典，用于本轮训练
+        train_args_for_this_round = self.args.copy()
+        train_args_for_this_round['lr'] = current_lr
+
+        if epoch > 0 and epoch % lr_decay_step == 0:
+            logger.info(f"Client {self.client_id} Learning Rate decayed to {current_lr} at epoch {epoch}")
+
+        # 5. 将包含“新”学习率的参数字典传递给Trainer
+        cal = self.trainer(self.model,self.dataloader,torch.nn.CrossEntropyLoss(),train_args_for_this_round)
+        ret_list = cal.train(self.args.get('local_epochs', 1))
         
         self.show_train_result(epoch, ret_list)
         return

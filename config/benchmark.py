@@ -58,21 +58,24 @@ class CIFAR10(BenchMark):
         super(CIFAR10,self).__init__('CIFAR10')
         self.global_args = {
             'client_num': 10,
-            'model': 'resnet50',
+            'model': 'resnet18',
             'dataset': 'CIFAR10',
-            'batch_size': 32,
+            'batch_size': 64,
             'class_num': 10,
             'data_folder': './data',
-            'communication_round': 10,
+            'communication_round': 200,
             'non-iid': False,
             'alpha': 1,
         }
         self.train_args = {
             'optimizer': 'SGD',
             'device': 'cuda',
-            'lr': 1e-2,
-            'weight_decay': 1e-5,  
-            'num_steps': 1,
+            'lr': 0.1,
+            'momentum': 0.9,
+            'weight_decay': 5e-4,
+            'local_epochs': 5,
+            'lr_decay_step': 15,  # 每 15 轮衰减一次
+            'lr_decay_rate': 0.1,  # 每次衰减为原来的 0.1 倍
         }
         self.algorithm = FedAvg()
         

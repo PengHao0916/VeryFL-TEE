@@ -417,7 +417,7 @@ class Task:
                 }
 
                 BYZANTINE_CLIENT_NUM_F=2;
-                AGGREGATION_STRATEGY = 'trimmed_mean'
+                AGGREGATION_STRATEGY = 'fedavg'
                 self.server.upload_model(encrypted_package,byzantine_client_num=BYZANTINE_CLIENT_NUM_F,strategy=AGGREGATION_STRATEGY)
 
                 client.test(epoch=i)

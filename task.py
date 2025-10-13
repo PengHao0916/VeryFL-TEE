@@ -261,7 +261,8 @@ class Task:
 
         for client_id, _ in self.client_list.items():
             new_client = self.client(client_id, self.train_dataloader_list[client_id], self.model,
-                                     self.trainer, self.train_args, self.test_dataloader, self.keys_dict[client_id])
+                                     self.trainer, self.train_args, self.test_dataloader, self.keys_dict[client_id]
+                                     , global_args=self.global_args)
             self.client_pool.append(new_client)
 
     # def run(self):

@@ -1,13 +1,13 @@
 #This implement the client class aims to intergate the trainging process.
 from abc import abstractmethod
 import logging
-
 from client.base.baseTrainer import BaseTrainer
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch
 from copy import deepcopy
 from typing import OrderedDict
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,14 @@ class Client:
         args: dict = {},
         test_dataloader: DataLoader = None,
         watermarks: dict = {},
+        global_args: dict = {},
     ) -> None:
         self.model = deepcopy(model)
         self.client_id = client_id
         self.dataloader = dataloader
         self.trainer = trainer
         self.args = args
+        self.global_args = global_args
         self.test_dataloader = test_dataloader
         self.watermarks = watermarks
         
@@ -146,31 +148,34 @@ class Client:
     def train(self, epoch: int):
         return
 
+
 class BaseClient(Client):
-    
+
     def train(self, epoch: int):
-        # 1. 从配置中获取初始学习率和衰减参数
-        initial_lr = self.args.get('lr', 0.001)
-        lr_decay_step = self.args.get('lr_decay_step', 1000)
-        lr_decay_rate = self.args.get('lr_decay_rate', 1.0)
+        # --- 这是新的、正确的学习率调度逻辑 ---
 
-        # 2. 根据当前通信轮数 (epoch) 计算衰减次数
-        decay_count = epoch // lr_decay_step
+        # 1. 从参数中获取初始学习率和总通信轮次
+        #    注意: 我们需要从 self.args（即train_args）和 self.watermarks（这里借用来传递global_args）获取参数
+        #    为了简化，我们先假设总轮数是固定的，比如200轮
+        initial_lr = self.args.get('lr', 0.01)
+        total_rounds = self.global_args.get('communication_round', 200) # 假设在train_args中也定义了总轮数
 
-        # 3. 计算当前轮的实际学习率
-        current_lr = initial_lr * (lr_decay_rate ** decay_count)
+        # 2. 手动计算当前全局轮次 (epoch) 对应的余弦退火学习率
+        #    这是余弦退火的数学公式
+        eta_min = 1e-6  # 学习率最小值
+        current_lr = eta_min + 0.5 * (initial_lr - eta_min) * \
+                    (1 + math.cos(math.pi * epoch / total_rounds))
 
-        # 4. 复制一份参数字典，用于本轮训练
+        if epoch % 10 == 0: # 每10轮打印一次，方便观察
+            logger.info(f"Client {self.client_id} at Global Round {epoch}, LR is {current_lr:.6f}")
+
+        # 3. 将计算出的新学习率用于本轮训练
         train_args_for_this_round = self.args.copy()
         train_args_for_this_round['lr'] = current_lr
 
-        if epoch > 0 and epoch % lr_decay_step == 0:
-            logger.info(f"Client {self.client_id} Learning Rate decayed to {current_lr} at epoch {epoch}")
+        cal = self.trainer(self.model, self.dataloader, torch.nn.CrossEntropyLoss(), train_args_for_this_round)
+        ret_list = cal.train(self.args.get('local_epochs', 5)) # 本地仍然训练5轮
 
-        # 5. 将包含“新”学习率的参数字典传递给Trainer
-        cal = self.trainer(self.model,self.dataloader,torch.nn.CrossEntropyLoss(),train_args_for_this_round)
-        ret_list = cal.train(self.args.get('local_epochs', 1))
-        
         self.show_train_result(epoch, ret_list)
         return
     

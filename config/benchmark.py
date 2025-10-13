@@ -48,7 +48,7 @@ class FashionMNIST(BenchMark):
             'optimizer': 'SGD',
             'device': 'cuda',
             'lr': 1e-2,
-            'weight_decay': 1e-5,  
+            'weight_decay': 5e-4,
             'num_steps': 1,
         }
         self.algorithm = FedAvg()
@@ -63,19 +63,19 @@ class CIFAR10(BenchMark):
             'batch_size': 64,
             'class_num': 10,
             'data_folder': './data',
-            'communication_round': 200,
+            'communication_round': 100,
             'non-iid': False,
             'alpha': 1,
         }
         self.train_args = {
             'optimizer': 'SGD',
             'device': 'cuda',
-            'lr': 0.1,
+            'lr': 0.01,
             'momentum': 0.9,
             'weight_decay': 5e-4,
             'local_epochs': 5,
-            'lr_decay_step': 15,  # 每 15 轮衰减一次
-            'lr_decay_rate': 0.1,  # 每次衰减为原来的 0.1 倍
+            #'lr_decay_step': 40,  #
+            #'lr_decay_rate': 0.1,  #
         }
         self.algorithm = FedAvg()
         

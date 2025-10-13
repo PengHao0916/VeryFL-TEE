@@ -6,7 +6,7 @@ from chainfl.interact import chainProxy
 import torch.optim
 #from server.serverSimulator import serverSimulator
 logger = logging.getLogger(__name__)
-
+from torch.optim.lr_scheduler import CosineAnnealingLR
 class BaseTrainer:
     """
     Base class for all trainers.
@@ -52,6 +52,10 @@ class BaseTrainer:
         else: 
             logger.error(f"Unknow Optimizer type {self.args['optimizer']}")
             raise Exception(f"Unknow Optimizer type {self.args['optimizer']}")
+
+        total_local_epochs = self.args.get('local_epochs', 1)
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=total_local_epochs, eta_min=1e-6)
+        logger.info(f"Using CosineAnnealingLR scheduler with T_max={total_local_epochs}")
     @abstractmethod
     def _train_epoch(self, epoch):
         """
@@ -80,7 +84,8 @@ class BaseTrainer:
         
         ret_list = list()
         for epoch in range(self.start_epoch,total_epoch):
-            ret_list.append(self._train_epoch(epoch))  
+            ret_list.append(self._train_epoch(epoch))
+            self.scheduler.step()
         return ret_list
     
     @abstractmethod

@@ -8,6 +8,9 @@ import json
 import numpy as np  # 引入numpy用于计算
 
 
+# 确保导入 json 和 hashlib (已存在)
+
+
 class TEEAggregator:
     def __init__(self):
         print("INFO: Simulated TEE Aggregator Initialized.")
@@ -23,7 +26,12 @@ class TEEAggregator:
         code_str = ""
         # 将所有聚合函数的代码都纳入哈希计算
         code_str += self._fedavg_aggregate.__code__.co_code.hex()
-        code_str += self._trimmed_mean_aggregate.__code__.co_code.hex()  # <-- 新增
+        code_str += self._trimmed_mean_aggregate.__code__.co_code.hex()
+        # --- 新增 ---
+        # 签名和哈希逻辑也应计入 MRENCLAVE
+        code_str += self._calculate_model_hash.__code__.co_code.hex()
+        code_str += self._sign_hash.__code__.co_code.hex()
+        # --- 结束 ---
         return hashlib.sha256(code_str.encode()).hexdigest()
 
     def generate_attestation_report(self, nonce: str):
@@ -107,10 +115,28 @@ class TEEAggregator:
         # 6. 对筛选后的“诚实”客户端模型列表执行标准的FedAvg
         return self._fedavg_aggregate(trusted_models)
 
+    # --- 新增哈希函数 ---
+    def _calculate_model_hash(self, model_state_dict: OrderedDict) -> str:
+        """在TEE内部计算模型的确定性哈希"""
+        model_json = json.dumps(OrderedDict({k: v.tolist() for k, v in model_state_dict.items()}))
+        model_hash = hashlib.sha256(model_json.encode('utf-8')).hexdigest()
+        return model_hash
+
+    # --- 新增签名函数 ---
+    def _sign_hash(self, model_hash: str) -> str:
+        """
+        (模拟) 在TEE内部使用私钥对哈希进行签名。
+        真实应用会使用 `cryptography` 库执行 `private_key.sign()`。
+        这里我们使用一个简化的HMAC替代：hash(hash + private_key)
+        """
+        signature_payload = f"{model_hash}{self._private_key}"
+        tee_signature = hashlib.sha256(signature_payload.encode('utf-8')).hexdigest()
+        return tee_signature
+
     def decrypt_and_aggregate(self, encrypted_models: List[Dict], byzantine_client_num: int,
                               strategy: str = 'trimmed_mean'):
         """
-        TEE核心入口: 解密后，根据策略选择聚合算法。
+        TEE核心入口: 解密，聚合，然后哈希并签名。
         """
         print(f"INFO: Entering TEE for secure aggregation using '{strategy}' strategy...")
 
@@ -140,10 +166,24 @@ class TEEAggregator:
             aggregated_result = self._trimmed_mean_aggregate(decrypted_model_list, byzantine_client_num)
         elif strategy == 'fedavg':
             aggregated_result = self._fedavg_aggregate(decrypted_model_list)
-        # 您可以继续添加 'krum' 等其他策略
         else:
             print(f"WARNING: Unknown aggregation strategy '{strategy}'. Defaulting to FedAvg.")
             aggregated_result = self._fedavg_aggregate(decrypted_model_list)
 
-        print("INFO: Secure aggregation complete. Exiting TEE.")
-        return aggregated_result
+        if aggregated_result is None:
+            print("ERROR: TEE aggregation failed.")
+            return None
+
+        # --- 关键改动：在TEE内部进行哈希和签名 ---
+        print("INFO: TEE securely hashing and signing the aggregated model...")
+        model_hash = self._calculate_model_hash(aggregated_result)
+        tee_signature = self._sign_hash(model_hash)
+
+        print("INFO: Secure aggregation, hashing, and signing complete. Exiting TEE.")
+
+        # 返回一个包含所有可信输出的数据包
+        return {
+            "model_state_dict": aggregated_result,
+            "model_hash": model_hash,
+            "tee_signature": tee_signature
+        }

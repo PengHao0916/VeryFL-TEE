@@ -5,7 +5,7 @@ import os
 
 # --- 配置 ---
 # 请将下面的文件名替换为您上一步找到的、最新的那个日志文件名
-LOG_FILE = 'log/2025_10_13_2.log'
+LOG_FILE = 'log/2025_10_14_0.log'
 # ---
 
 def parse_log_file(file_path):

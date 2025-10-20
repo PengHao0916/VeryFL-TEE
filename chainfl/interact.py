@@ -1,3 +1,5 @@
+# chainfl/interact.py
+
 '''
 include the upload and the download method for client to interact with the blockchain.
 '''
@@ -12,33 +14,35 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-#chain init
-p = project.load(project_path="chainEnv",name="chainServer")
+# chain init
+p = project.load(project_path="chainEnv", name="chainServer")
 p.load_config()
 from brownie.project.chainServer import *
+
 network.connect('development')
-#SimpleStorage.deploy({'from':accounts[0]})
+# SimpleStorage.deploy({'from':accounts[0]})
 server_accounts = accounts[0]
-watermarkNegotiation.deploy({'from':server_accounts})
-clientManager.deploy({'from':server_accounts})
+watermarkNegotiation.deploy({'from': server_accounts})
+clientManager.deploy({'from': server_accounts})
 NetworkManager.deploy({'from': server_accounts})
 network_manager_proxy = NetworkManager[0]
-        
+
+
 def upload():
-    raise NotImplementedError 
+    raise NotImplementedError
 
 
-#utils for blockchain
-#The client communicate with the blockchain through chainProxy.
+# utils for blockchain
+# The client communicate with the blockchain through chainProxy.
 
 class chainProxy():
     def __init__(self):
         self.upload_params = None
-        self.account_num = len(accounts) - 1 #accounts used for client
+        self.account_num = len(accounts) - 1  # accounts used for client
         self.watermark_proxy = watermarkNegotiation[0]
         self.server_accounts = accounts[0]
         self.client_num = 0
-        
+
         '''
         Here Brownie store all address in a vector.
         We just delegate the index of the vector to the client as the ClientID (str)
@@ -46,45 +50,72 @@ class chainProxy():
         '''
         self.client_list = defaultdict(type(accounts[0].address))
         # blockchain_init
+
     def get_account_num(self):
         return self.account_num
+
     def get_client_num(self):
         return self.client_num
-    
+
     def get_client_list(self):
         return self.client_list
 
     def get_block_height(self):
         return network.chain.height
 
-    def upload_model_hash(self, model_hash, epoch):
-        # 我们用服务器的账户 (accounts[0]) 来发送这个交易
-        # 为了简化，我们只上传哈希的前半部分作为结果 a，轮数作为 epoch
-        # 智能合约的 upload_result 函数需要三个 uint 参数 (a, b, epoch)
-        # 实际研究中，您需要将256位的哈希拆分为多个uint来完整上传
-        tx = network_manager_proxy.upload_result(model_hash, 0, epoch, {'from': self.server_accounts})
-        print(f"----> 已上传第 {epoch} 轮的模型哈希，交易ID: {tx.txid}")
+    # --- 函数已修改 ---
+    def upload_model_proof(self, model_hash: str, model_signature: str, epoch: int):
+        """
+        将 TEE 生成的哈希和签名上传到区块链。
+        我们利用 upload_result(a, b, epoch)，令 a = hash, b = signature。
+        """
+        # 两个都是256位的十六进制哈希字符串，转换为大整数
+        try:
+            model_hash_int = int(model_hash, 16)
+            model_signature_int = int(model_signature, 16)
 
-    def add_account(self)->str:
+            tx = network_manager_proxy.upload_result(
+                model_hash_int,
+                model_signature_int,
+                epoch,
+                {'from': self.server_accounts}
+            )
+            print(f"----> 已上传第 {epoch} 轮的模型证明 (Hash+Signature)，交易ID: {tx.txid}")
+
+        except Exception as e:
+            print(f"ERROR: 上传模型证明到区块链失败: {e}")
+
+    # --- 旧函数 (可保留或删除) ---
+    def upload_model_hash(self, model_hash, epoch):
+        # 此函数现在已被 upload_model_proof 替代
+        print("WARNING: upload_model_hash 已被弃用, 请使用 upload_model_proof。")
+        model_hash_int = int(model_hash, 16)
+        tx = network_manager_proxy.upload_result(model_hash_int, 0, epoch, {'from': self.server_accounts})
+        print(f"----> (旧) 已上传第 {epoch} 轮的模型哈希，交易ID: {tx.txid}")
+
+    # --- 结束 ---
+
+    def add_account(self) -> str:
         account = accounts.add()
         self.account_num += 1
         return account.address
-    
-    #construct the projection between account and client
-    def client_regist(self)->str:
+
+    # ... (文件其余部分: client_regist, watermark_negotitaion, upload_model, download_model, construct_sign 保持不变) ...
+
+    def client_regist(self) -> str:
         self.client_num += 1
-        if(self.account_num<self.client_num):
+        if (self.account_num < self.client_num):
             self.add_account()
         self.client_list[str(self.client_num)] = accounts[self.client_num]
         network_manager_proxy.client_regist({'from': accounts[self.client_num]})
 
-        return str(self.client_num) 
-    
-    def watermark_negotitaion(self,client_id:str,watermark_length=64):
+        return str(self.client_num)
+
+    def watermark_negotitaion(self, client_id: str, watermark_length=64):
         client_id = int(client_id)
-        self.watermark_proxy.generate_watermark({'from':accounts[client_id]})
-    
-    def upload_model(self,upload_params:dict):
+        self.watermark_proxy.generate_watermark({'from': accounts[client_id]})
+
+    def upload_model(self, upload_params: dict):
         '''
         This function recieve a dict and the value in this dict must be the type which json can serilized
         And there must have a key named state_dict and the value type is OrderedDict in pytorch model.state_dict()
@@ -92,35 +123,35 @@ class chainProxy():
         '''
         model_state_dict = upload_params['state_dict']
         upload_params['state_dict'] = jsonFormat.model2json(model_state_dict)
-        #Upload
+        # Upload
         self.upload_params = upload_params
-        return 
-    
-    def download_model(self, params = None):
+        return
+
+    def download_model(self, params=None):
         '''
         从区块链上接受json格式的字符串为全局模型并下载。
         但会返回一个orderdict作为全局模型的state_dict
         '''
         download_params = self.upload_params
-        download_params['state_dict']  = jsonFormat.json2model(download_params['state_dict'])   
+        download_params['state_dict'] = jsonFormat.json2model(download_params['state_dict'])
         return download_params
-    
+
     def construct_sign(self, args: dict = {}):
         sign_config = args.get('sign_config')
-        model_name  = args.get('model')
-        bit_length  = args.get('bit_length')
-        
+        model_name = args.get('model')
+        bit_length = args.get('bit_length')
+
         if model_name != "SignAlexNet":
             logger.error("Watermark Not Support for this network")
             raise Exception("Watermark Not Support for this network")
-        
+
         watermark_args = dict()
         alexnet_channels = {
-        '4': (384, 3456),
-        '5': (256, 2304),
-        '6': (256, 2304)
+            '4': (384, 3456),
+            '5': (256, 2304),
+            '6': (256, 2304)
         }
-        
+
         for layer_key in sign_config:
             flag = sign_config[layer_key]
             b = flag if isinstance(flag, str) else None
@@ -132,11 +163,11 @@ class chainProxy():
 
             if b is not None:
                 if layer_key == "4":
-                    output_channels = int (bit_length * 384 / 896)
+                    output_channels = int(bit_length * 384 / 896)
                 if layer_key == "5":
-                    output_channels = int (bit_length * 256/ 896)
+                    output_channels = int(bit_length * 256 / 896)
                 if layer_key == "6":
-                    output_channels = int (bit_length * 256/ 896)
+                    output_channels = int(bit_length * 256 / 896)
 
                 b = torch.sign(torch.rand(output_channels) - 0.5)
                 M = torch.randn(alexnet_channels[layer_key][0], output_channels)
@@ -144,6 +175,7 @@ class chainProxy():
                 watermark_args[layer_key]['b'] = b
                 watermark_args[layer_key]['M'] = M
 
-        return watermark_args  
-    
+        return watermark_args
+
+
 chain_proxy = chainProxy()
